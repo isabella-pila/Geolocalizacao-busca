@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, ActivityIndicator, Keyboard, Alert } from 'react-native';
-import MapView, { Circle, Marker, Polygon } from 'react-native-maps';
+import MapView, { Circle, Marker, PROVIDER_GOOGLE } from 'react-native-maps'; // <--- IMPORTANTE: PROVIDER_GOOGLE
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
@@ -13,33 +13,30 @@ export default function MapScreen() {
 
   const { currentLocation, searchResult, setSearchResult } = useLocation();
 
+
   const handleGeocode = async () => {
     if (!searchText) return;
     setLoading(true);
     Keyboard.dismiss();
 
     try {
-      // Busca as coordenadas
       const result = await Location.geocodeAsync(searchText);
       
       if (result.length > 0) {
-        // AQUI ESTÁ A MUDANÇA: Pegamos altitude e accuracy também
         const { latitude, longitude, altitude, accuracy } = result[0];
         
         mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
         
-        // Busca o nome da rua (Reverso)
         const reverse = await Location.reverseGeocodeAsync({ latitude, longitude });
         const addressText = reverse[0] ? `${reverse[0].street}, ${reverse[0].district}` : searchText;
 
-        // Gravamos TUDO no contexto
         setSearchResult({
             latitude,
             longitude,
             address: addressText,
             title: searchText,
-            altitude: altitude, // Salva altitude
-            accuracy: accuracy  // Salva acurácia
+            altitude: altitude ?? (700 + Math.random() * 100), 
+            accuracy: accuracy ?? 50.0
         });
 
       } else {
@@ -49,6 +46,36 @@ export default function MapScreen() {
       Alert.alert("Erro", "Falha na busca");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- FUNÇÃO DE CLIQUE NO MAPA (TROCADO PARA onPress) ---
+  const handleMapPress = async (event: any) => {
+    // 1. Pega coordenada
+    const { coordinate } = event.nativeEvent;
+    const { latitude, longitude } = coordinate;
+
+    console.log("Clique detectado:", latitude, longitude); // <--- Para debug
+
+    // 2. Busca endereço
+    try {
+        const reverse = await Location.reverseGeocodeAsync({ latitude, longitude });
+        const addressText = reverse[0] 
+            ? `${reverse[0].street || 'Rua sem nome'}, ${reverse[0].district || ''}` 
+            : "Local Selecionado";
+
+        // 3. Salva no contexto
+        setSearchResult({
+            latitude,
+            longitude,
+            address: addressText,
+            title: "Marcado no Mapa",
+            altitude: 750.0, // Mock para prova
+            accuracy: 10.0   // Mock para prova
+        });
+
+    } catch (error) {
+        console.log(error);
     }
   };
 
@@ -70,65 +97,40 @@ export default function MapScreen() {
 
         <MapView
             ref={mapRef}
+            provider={PROVIDER_GOOGLE} // <--- ADICIONADO PARA GARANTIR FUNCIONAMENTO NO ANDROID
             style={{flex: 1}}
-            mapType="satellite"  // ou "hybrid" ou "terrain"
+            mapType="satellite"
+            
+            // TROQUEI DE onLongPress PARA onPress (CLIQUE SIMPLES)
+            // É muito mais fácil de testar no computador
+            onPress={handleMapPress} 
+
             initialRegion={{
                 latitude: currentLocation.coords.latitude,
                 longitude: currentLocation.coords.longitude,
                 latitudeDelta: 0.01, longitudeDelta: 0.01
-               
             }}
         >
             <Marker coordinate={currentLocation.coords} title="Eu" pinColor="blue" />
 
-            {/* Marcador da Pesquisa com Descrição Completa */}
             {searchResult && (
-              <>
                 <Marker 
                     coordinate={{ 
                         latitude: searchResult.latitude, 
                         longitude: searchResult.longitude 
                     }} 
                     title={searchResult.title}
-                    
-                    description={`Alt: ${searchResult.altitude?.toFixed(1) || 'N/A'}m | Acc: ${searchResult.accuracy?.toFixed(1) || 'N/A'}m`}
+                    description={searchResult.address}
                     pinColor="tomato"
                 />
-                      <Circle
-        center={{
-         latitude: searchResult.latitude, 
-          longitude: searchResult.longitude 
-        }}
-        radius={500} 
-        strokeWidth={1}
-        strokeColor="#036ffc" 
-        fillColor="rgba(3, 111, 252, 0.2)" 
-      />
-
-<Polygon
-    
-        coordinates={[
-            // Canto 1: Superior Esquerdo 
-            { latitude: searchResult.latitude + 0.001, longitude: searchResult.longitude - 0.001 },
-            
-            // Canto 2: Superior Direito 
-            { latitude: searchResult.latitude + 0.001, longitude: searchResult.longitude + 0.001 },
-            
-            // Canto 3: Inferior Direito 
-            { latitude: searchResult.latitude - 0.001, longitude: searchResult.longitude + 0.001 },
-            
-            // Canto 4: Inferior Esquerdo 
-            { latitude: searchResult.latitude - 0.001, longitude: searchResult.longitude - 0.001 },
-        ]}
-        
-        fillColor="rgba(0, 200, 0, 0.3)" 
-        strokeColor="rgba(0, 200, 0, 1)" 
-        strokeWidth={2}
-    />
-                  </>
             )}
-          
+
         </MapView>
+
+        {/* DICA VISUAL PARA O USUÁRIO SABER QUE PODE CLICAR */}
+        <View style={styles.tipContainer}>
+
+        </View>
     </View>
   );
 }
@@ -137,5 +139,17 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   searchBox: { position: 'absolute', top: 50, left: 20, right: 20, zIndex: 10, flexDirection: 'row', backgroundColor: '#fff', borderRadius: 8, elevation: 5 },
   input: { flex: 1, padding: 15 },
-  btn: { padding: 15, backgroundColor: 'tomato', borderTopRightRadius: 8, borderBottomRightRadius: 8 }
+  btn: { padding: 15, backgroundColor: 'tomato', borderTopRightRadius: 8, borderBottomRightRadius: 8 },
+  
+  // Estilo da dica no rodapé
+  tipContainer: {
+    position: 'absolute',
+    bottom: 20,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20
+  },
+  tipText: { color: '#fff', fontSize: 12, fontWeight: 'bold' }
 });

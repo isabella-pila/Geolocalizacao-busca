@@ -3,8 +3,20 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocation } from '../context/LocationContext';
 
+// --- 1. FUNÇÃO DE CÁLCULO (Pode ficar fora do componente) ---
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 export default function InfoScreen() {
-  const { searchResult } = useLocation();
+  // --- 2. IMPORTANTE: Adicionei o 'currentLocation' aqui ---
+  const { searchResult, currentLocation } = useLocation();
 
   if (!searchResult) {
     return (
@@ -24,6 +36,23 @@ export default function InfoScreen() {
         
         <View style={styles.divider} />
 
+        {/* --- 3. BLOCO DA DISTÂNCIA --- */}
+        <View style={styles.row}>
+            <Text style={styles.labelBold}>Distância até você:</Text>
+            <Text style={{color: 'tomato', fontWeight: 'bold'}}>
+                {currentLocation ? (
+                    getDistance(
+                        currentLocation.coords.latitude, 
+                        currentLocation.coords.longitude,
+                        searchResult.latitude,
+                        searchResult.longitude
+                    ).toFixed(2) + ' km'
+                ) : 'Aguardando GPS...'}
+            </Text>
+        </View>
+
+        <View style={styles.divider} />
+
         <View style={styles.row}>
             <Text style={styles.labelBold}>Latitude:</Text>
             <Text>{searchResult.latitude.toFixed(5)}</Text>
@@ -34,7 +63,6 @@ export default function InfoScreen() {
             <Text>{searchResult.longitude.toFixed(5)}</Text>
         </View>
 
-        {/* NOVOS DADOS */}
         <View style={styles.row}>
             <Text style={styles.labelBold}>Altitude:</Text>
             <Text>
